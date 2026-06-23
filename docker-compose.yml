@@ -1,0 +1,52 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: rag-backend
+    env_file:
+      - .env
+    environment:
+      VECTORSTORE_HOST: vectorstore
+      VECTORSTORE_PORT: "6333"
+      QDRANT_URL: http://vectorstore:6333
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    volumes:
+      # User drops documents here; backend scans this folder.
+      - ./docs:/app/docs
+      # Persist SQLite config DB and any on-disk data across restarts.
+      - backend_data:/app/data
+    depends_on:
+      - vectorstore
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: rag-frontend
+    env_file:
+      - .env
+    environment:
+      # Used by next.config rewrites to reach the backend over the compose network.
+      BACKEND_INTERNAL_URL: http://backend:8000
+      NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-/api}
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  vectorstore:
+    image: qdrant/qdrant:latest
+    container_name: rag-vectorstore
+    ports:
+      - "${VECTORSTORE_PORT:-6333}:6333"
+    volumes:
+      - qdrant_data:/qdrant/storage
+    restart: unless-stopped
+
+volumes:
+  backend_data:
+  qdrant_data:
